@@ -8,3 +8,5 @@ django
 pypdf
 daphne
 channels
+djangorestframework
+django-cors-headers

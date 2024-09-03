@@ -14,6 +14,7 @@ const QaBot = () => {
   const [messages, setMessages] = useState([]);
   const [typing, setTyping] = useState(false);
   const ws = useRef(null);
+  const ongoingStream = useRef(null); // Use useRef for ongoingStream
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
   const maxReconnectAttempts = 5;
 
@@ -24,7 +25,12 @@ const QaBot = () => {
 
     ws.current = new WebSocket('ws://127.0.0.1:8000/ws/chat/');
 
-    let ongoingStream = null;
+    if (ws.current) {
+      ws.current.onopen = () => {
+        console.log('WebSocket connected!');
+        setReconnectAttempts(0);
+      };
+    }
 
     ws.current.onopen = () => {
       console.log('WebSocket connected!');
@@ -36,9 +42,11 @@ const QaBot = () => {
       let sender = data.name;
 
       if (data.event === 'on_parser_start') {
-        ongoingStream = { id: data.run_id, content: '' };
-        setMessages((prevMessages) => [...prevMessages, { message: '', sender: sender, direction: 'incoming', id: data.run_id }]);
-      } else if (data.event === 'on_parser_stream' && ongoingStream && data.run_id === ongoingStream.id) {
+        ongoingStream.current = { id: data.run_id, content: '' };
+        setMessages((prevMessages) => [
+          ...prevMessages, 
+          { message: '', sender: sender, direction: 'incoming', id: data.run_id }]);
+      } else if (data.event === 'on_parser_stream' && ongoingStream.current && data.run_id === ongoingStream.current.id) {
         setMessages((prevMessages) =>
           prevMessages.map((msg) =>
             msg.id === data.run_id ? { ...msg, message: msg.message + data.data.chunk } : msg
@@ -64,7 +72,7 @@ const QaBot = () => {
   const handleReconnect = () => {
     if (reconnectAttempts < maxReconnectAttempts) {
       setReconnectAttempts((prevAttempts) => prevAttempts + 1);
-      let timeout = Math.pow(2, reconnectAttempts) * 1000;
+      const timeout = Math.pow(2, reconnectAttempts) * 1000;
       console.log(`Attempting to reconnect in ${timeout / 1000} seconds...`);
       setTimeout(() => {
         setupWebSocket();
